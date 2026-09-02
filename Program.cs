@@ -1,23 +1,22 @@
 using Supabase;
 
-// 1. สร้าง Builder แบบล้าง Config เก่าทั้งหมด (ป้องกัน FileSystemWatcher Crash)
-var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions
+// 1. ปิด FileSystemWatcher ในระดับ Environment ป้องกันการ Crash บน Linux Docker
+Environment.SetEnvironmentVariable("DOTNET_USE_POLLING_FILE_WATCHER", "true");
+
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
     ContentRootPath = AppContext.BaseDirectory
 });
 
-// 2. โหลด Config โดยไม่ใช้ FileWatcher (reloadOnChange: false)
+// 2. เคลียร์ Configuration และโหลดแบบปิด reloadOnChange
+builder.Configuration.Sources.Clear();
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
     .AddEnvironmentVariables();
 
-// 3. ลงทะเบียน Services พื้นฐาน
-builder.Services.AddRouting();
-builder.Services.AddControllers();
-
-// 4. CORS Policy
+// 3. ตั้งค่า CORS Policy
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -26,7 +25,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
-// 5. Supabase Client Setup
+// 4. ลงทะเบียน Supabase Client
 builder.Services.AddSingleton(sp =>
 {
     var url = "https://axiswrwyscakeacrgrcy.supabase.co";
@@ -40,9 +39,11 @@ builder.Services.AddSingleton(sp =>
     return new Supabase.Client(url, key, options);
 });
 
+builder.Services.AddControllers();
+
 var app = builder.Build();
 
-// 6. Config Middleware & Routes
+// 5. เปิดใช้งาน Middleware
 app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
